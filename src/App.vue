@@ -1,8 +1,6 @@
 <template>
-  <div>
-    <WalletButton msg="The Multi Button"/>
+    <WalletButton msg="The Multi Button" />
     <CoinGame msg="Welcome to Your Vue.js App" />
-  </div>
 </template>
 
 <script>

@@ -30,6 +30,12 @@
       <button @click="gameProgramCount()">gameProgramCount</button>
       <button @click="initRwardDistributor()">initRwardDistributor</button>
     </div>
+    <div>
+      <button @click="aTob()">player To reward distributor</button>
+      <button @click="bToa()">reward distributor To player (owner not match)</button>
+      <button @click="aTob()">authority To reward distributor</button>
+      <button @click="bToa()">reward distributor To authority</button>
+    </div>
   </section>
 </template>
 
@@ -66,22 +72,30 @@ export default {
     /*
     Set up
     */
-    const wallet = useWallet();
-    wallet.publicKey = wallet.publicKey.value ?? wallet.publicKey;
-    wallet.signAllTransactions = wallet.signAllTransactions.value ?? wallet.signAllTransactions
-    console.log('wallet:', wallet)
-
+    let wallet
+    let connection
+    let provider
     const COINGAME_PROGRAM_ADDRESS = new PublicKey("7m69C1L22UGQs4NBiyDaPvVz6WRiXKTiPTt1im2hr3Fw")
 
-    const connection = new anchor.web3.Connection(clusterApiUrl('devnet'))
-    const provider = new anchor.AnchorProvider(connection, wallet) //, AnchorProvider.defaultOptions()
-    console.log('provider:', provider)
+    async function setUp() {
+      console.log('connecting wallet......')
+      wallet = useWallet();
+      wallet.publicKey = wallet.publicKey.value ?? wallet.publicKey;
+      wallet.signAllTransactions = wallet.signAllTransactions.value ?? wallet.signAllTransactions
+      console.log('wallet:', wallet)
+
+      console.log('connecting Url......')
+      connection = new anchor.web3.Connection(clusterApiUrl('devnet'))
+      console.log('setting providor......')
+      provider = new anchor.AnchorProvider(connection, wallet) //, AnchorProvider.defaultOptions()
+      console.log('provider:', provider)
+    }
 
     let idl //F6YzUPirXo8UBX8Z5YcLicryVEuJKmhqvsYG3dTPBXUL
     let program;
 
     async function findProgram() {
-      console.log('Setting......')
+      console.log('finding program......')
       // connect to program
       try {
         let retryCount = 0;
@@ -102,14 +116,50 @@ export default {
       }
     }
 
+    let userRewardMintAtaId
+    let rewardMintId = new PublicKey('2inV5JYpdUc5MAgqY6tWx11Bm3694PDm3GmjFLpN4tfz')
+    let entryId = 'user2' //'user1' // id should be user's address (provider.wallet.publicKey.toString())
+    let rewardEntryId
+    let rewardDistributorId
+
+    async function findAccountAndAddress() {
+      userRewardMintAtaId = getAssociatedTokenAddressSync(
+        rewardMintId,
+        provider.wallet.publicKey
+      );
+      console.log('userRewardMintAtaId:', userRewardMintAtaId.toBase58())
+
+      rewardEntryId = PublicKey.findProgramAddressSync(
+        [
+          utils.bytes.utf8.encode("reward_entry_state"),
+          utils.bytes.utf8.encode(entryId)
+        ],
+        COINGAME_PROGRAM_ADDRESS
+      )[0];
+      console.log('rewardEntryId:', rewardEntryId.toBase58())
 
 
-    async function viewProgram() {
-      console.log('ppp:', program)
-      console.log('rewardMintId:', rewardMintId)
+      rewardDistributorId = PublicKey.findProgramAddressSync(
+        [
+          utils.bytes.utf8.encode("reward_distributor_state"),
+          utils.bytes.utf8.encode('testidentifier1')
+        ],
+        COINGAME_PROGRAM_ADDRESS
+      )[0];
+      console.log('rewardDistributorId:', rewardDistributorId.toBase58())
     }
 
+    let rewardEntryData = ref()
 
+    async function getRewardEntry() {
+      try {
+        rewardEntryData.value = await program.account.rewardEntry.fetch(rewardEntryId);
+        // console.log('Already have reward entry:', rewardEntryData.value);
+        console.log('rewardAmount:', rewardEntryData.value.rewardAmount.toString());
+      } catch (error) {
+        rewardEntryData.value = null;
+      }
+    }
 
     async function gameProgramCount() {
       const programDetail = await connection.getProgramAccounts(
@@ -132,119 +182,6 @@ export default {
 
       return programDetail.length
     }
-
-
-
-    let rewardMintId = new PublicKey('2inV5JYpdUc5MAgqY6tWx11Bm3694PDm3GmjFLpN4tfz')
-    let userRewardMintAtaId = getAssociatedTokenAddressSync(
-      rewardMintId,
-      provider.wallet.publicKey
-    );
-    console.log('userRewardMintAtaId:', userRewardMintAtaId.toBase58())
-
-    let rewardEntryData = ref();
-    let entryId = 'user2' //'user1' // id should be user's address (provider.wallet.publicKey.toString())
-
-    const rewardEntryId = PublicKey.findProgramAddressSync(
-      [
-        utils.bytes.utf8.encode("reward_entry_state"),
-        utils.bytes.utf8.encode(entryId)
-      ],
-      COINGAME_PROGRAM_ADDRESS
-    )[0];
-    console.log('rewardEntryId:', rewardEntryId.toBase58())
-
-    async function getRewardEntry() {
-      try {
-        rewardEntryData.value = await program.account.rewardEntry.fetch(rewardEntryId);
-        // console.log('Already have reward entry:', rewardEntryData.value);
-        console.log('rewardAmount:', rewardEntryData.value.rewardAmount.toString());
-      } catch (error) {
-        rewardEntryData.value = null;
-      }
-    }
-
-
-
-    /*
-    Init Reward Distributor
-    */
-    const rewardDistributorId = PublicKey.findProgramAddressSync(
-      [
-        utils.bytes.utf8.encode("reward_distributor_state"),
-        utils.bytes.utf8.encode('testidentifier1')
-      ],
-      COINGAME_PROGRAM_ADDRESS
-    )[0];
-    console.log('rewardDistributorId:', rewardDistributorId.toBase58())
-
-    async function initRwardDistributor() {
-      console.log('aabbc')
-
-      // rewardDistributorAtaId: DEUHs3iJZEGf9uQ8GTzEHi1ekD51JQUSiMkMvYKLe7Mv
-      // userRewardMintAta: FD5ZNWRUYbusnA8qdNPZREaXPxz5QvRKFPHjHrtzEsay
-
-      const txs = []
-      const tx = new Transaction();
-      const ix = await program.methods
-        .initRewardDistributor({
-          identifier: 'testidentifier1',
-        })
-        .accountsStrict({
-          rewardDistributor: rewardDistributorId,
-          rewardMint: rewardMintId,
-          authority: provider.wallet.publicKey,
-          player: provider.wallet.publicKey,
-          systemProgram: SystemProgram.programId,
-          tokenProgram: TOKEN_PROGRAM_ID
-        })
-        .instruction();
-
-      console.log('ix:', ix)
-      tx.add(ix)
-
-      let rewardDistributorAtaId = await withFindOrInitAssociatedTokenAccount(
-        tx,
-        provider.connection,
-        rewardMintId,
-        rewardDistributorId,
-        provider.wallet.publicKey,
-        true
-      );
-      console.log('rewardDistributorAtaId:', rewardDistributorAtaId.toBase58())
-
-      let userRewardMintAta = getAssociatedTokenAddressSync(
-        rewardMintId,
-        provider.wallet.publicKey
-      );
-      console.log('userRewardMintAta:', userRewardMintAta.toBase58())
-
-      // set the initial amount
-      tx.add(
-        createTransferInstruction(
-          userRewardMintAta,
-          rewardDistributorAtaId,
-          provider.wallet.publicKey,
-          500
-        )
-      );
-
-      console.log(provider.wallet.publicKey.toString())
-      console.log(provider.wallet.publicKey.toBase58())
-      console.log(provider.wallet.wallet.value.adapter)
-
-      txs.push(tx)
-
-      const result = await executeTransactions(provider.connection, txs, provider.wallet.wallet.value.adapter); //provider.wallet.wallet.value
-      console.log('--------- Init Reward Distributor ---------')
-      console.log('success', result)
-
-      // get reward distributor
-      let fetchedrewardDistributorId = await program.account.rewardDistributor.fetch(rewardDistributorId);
-      console.log('fetchedrewardDistributorId:', fetchedrewardDistributorId)
-    }
-
-
 
     /*
     Start Game:
@@ -356,7 +293,20 @@ export default {
       await getRewardEntry()
     }
 
+    async function gameResult(gameId) {
+      console.log('gameId:', gameId)
+      const gameStateId = PublicKey.findProgramAddressSync(
+        [
+          utils.bytes.utf8.encode("game_state"),
+          utils.bytes.utf8.encode(gameId) // a random id
+        ],
+        COINGAME_PROGRAM_ADDRESS
+      )[0];
+      console.log('gameStateId:', gameStateId.toBase58())
 
+      let fetchedCoinGameStateId = await program.account.gameState.fetch(gameStateId);
+      console.log('fetchedCoinGameStateId:', fetchedCoinGameStateId)
+    }
 
     /*
     Claim Reward
@@ -400,9 +350,9 @@ export default {
         console.log('--------- Claim Rewards ---------')
         console.log('success', result)
       }
+
+      await getRewardEntry()
     }
-
-
 
     async function checkAmount() {
       let rewardDistributorAta = await getAccount(
@@ -422,24 +372,154 @@ export default {
 
 
 
-    async function gameResult(gameId) {
-      console.log('gameId:', gameId)
-      const gameStateId = PublicKey.findProgramAddressSync(
-        [
-          utils.bytes.utf8.encode("game_state"),
-          utils.bytes.utf8.encode(gameId) // a random id
-        ],
-        COINGAME_PROGRAM_ADDRESS
-      )[0];
-      console.log('gameStateId:', gameStateId.toBase58())
 
-      let fetchedCoinGameStateId = await program.account.gameState.fetch(gameStateId);
-      console.log('fetchedCoinGameStateId:', fetchedCoinGameStateId)
+
+
+    async function aTob() {
+      const txs = []
+      const tx = new Transaction();
+
+      // set the initial amount
+      tx.add(
+        createTransferInstruction(
+          userRewardMintAtaId,
+          new PublicKey('DEUHs3iJZEGf9uQ8GTzEHi1ekD51JQUSiMkMvYKLe7Mv'),
+          // userRewardMintAtaId,
+          provider.wallet.publicKey,
+          100
+        )
+      );
+
+      txs.push(tx)
+
+      const result = await executeTransactions(provider.connection, txs, provider.wallet.wallet.value.adapter); //provider.wallet.wallet.value
+      console.log('--------- Start Game ---------')
+      console.log('success', result)
+    }
+    async function bToa() {
+      const txs = []
+      const tx = new Transaction();
+
+      // set the initial amount
+      tx.add(
+        createTransferInstruction(
+          new PublicKey('DEUHs3iJZEGf9uQ8GTzEHi1ekD51JQUSiMkMvYKLe7Mv'),
+          userRewardMintAtaId,
+          provider.wallet.publicKey,
+          100
+        )
+      );
+
+      txs.push(tx)
+
+      const result = await executeTransactions(provider.connection, txs, provider.wallet.wallet.value.adapter); //provider.wallet.wallet.value
+      console.log('--------- Start Game ---------')
+      console.log('success', result)
+    }
+    /*
+     ['Program ComputeBudget111111111111111111111111111111 invoke [1]', 
+    'Program ComputeBudget111111111111111111111111111111 success', 
+    'Program ComputeBudget111111111111111111111111111111 invoke [1]', 
+    'Program ComputeBudget111111111111111111111111111111 success', 
+    'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [1]', 
+    'Program log: Instruction: Transfer', 
+    'Program log: Error: owner does not match', 
+    'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4470 of 199700 compute units', 
+    'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA failed: custom program error: 0x4']
+      0: "Program ComputeBudget111111111111111111111111111111 invoke [1]"
+      1: "Program ComputeBudget111111111111111111111111111111 success"
+      2: "Program ComputeBudget111111111111111111111111111111 invoke [1]"
+      3: "Program ComputeBudget111111111111111111111111111111 success"
+      4: "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [1]"
+      5: "Program log: Instruction: Transfer"
+      6: "Program log: Error: owner does not match"
+      7: "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4470 of 199700 compute units"
+      8: "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA failed: custom program error: 0x4"length: 
+      9[[Prototype]]: Array(0) 'failed to send transaction: Transaction simulation failed: Error processing Instruction 2: custom program error: 0x4'
+    */
+
+    async function viewProgram() {
+      console.log('ppp:', program)
+      console.log('rewardMintId:', rewardMintId)
     }
 
+    /*
+    Init Reward Distributor
+    */
+    async function initRwardDistributor() {
+      console.log('aabbc')
+
+      // rewardDistributorAtaId: DEUHs3iJZEGf9uQ8GTzEHi1ekD51JQUSiMkMvYKLe7Mv
+      // userRewardMintAta: FD5ZNWRUYbusnA8qdNPZREaXPxz5QvRKFPHjHrtzEsay
+
+      const txs = []
+      const tx = new Transaction();
+      const ix = await program.methods
+        .initRewardDistributor({
+          identifier: 'testidentifier1',
+        })
+        .accountsStrict({
+          rewardDistributor: rewardDistributorId,
+          rewardMint: rewardMintId,
+          authority: provider.wallet.publicKey,
+          player: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+          tokenProgram: TOKEN_PROGRAM_ID
+        })
+        .instruction();
+
+      console.log('ix:', ix)
+      tx.add(ix)
+
+      let rewardDistributorAtaId = await withFindOrInitAssociatedTokenAccount(
+        tx,
+        provider.connection,
+        rewardMintId,
+        rewardDistributorId,
+        provider.wallet.publicKey,
+        true
+      );
+      console.log('rewardDistributorAtaId:', rewardDistributorAtaId.toBase58())
+
+      let userRewardMintAta = getAssociatedTokenAddressSync(
+        rewardMintId,
+        provider.wallet.publicKey
+      );
+      console.log('userRewardMintAta:', userRewardMintAta.toBase58())
+
+      // set the initial amount
+      tx.add(
+        createTransferInstruction(
+          userRewardMintAta,
+          rewardDistributorAtaId,
+          provider.wallet.publicKey,
+          500
+        )
+      );
+
+      console.log(provider.wallet.publicKey.toString())
+      console.log(provider.wallet.publicKey.toBase58())
+      console.log(provider.wallet.wallet.value.adapter)
+
+      txs.push(tx)
+
+      const result = await executeTransactions(provider.connection, txs, provider.wallet.wallet.value.adapter); //provider.wallet.wallet.value
+      console.log('--------- Init Reward Distributor ---------')
+      console.log('success', result)
+
+      // get reward distributor
+      let fetchedrewardDistributorId = await program.account.rewardDistributor.fetch(rewardDistributorId);
+      console.log('fetchedrewardDistributorId:', fetchedrewardDistributorId)
+    }
+    
+
+
     onMounted(async () => {
-      console.log('------------- Hello player. -------------')
+      await setUp()
+      console.log("Player Publickey:", wallet.publicKey.toString())
+      await findAccountAndAddress()
       await findProgram()
+      console.log('------------- Hello player. -------------')
       await getRewardEntry()
     });
 
@@ -451,7 +531,9 @@ export default {
       checkAmount,
       rewardEntryData,
       gameResult,
-      gameProgramCount
+      gameProgramCount,
+      aTob,
+      bToa
     }
   }
 }
@@ -462,9 +544,5 @@ export default {
 .section {
   margin-top: 30px;
   margin-bottom: 100px;
-  /* border: 1px solid #000;
-  padding: 10px;
-  width: 500px;
-  height: 200px; */
 }
 </style>
